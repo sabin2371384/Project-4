@@ -14,6 +14,7 @@ class BookDB(Base):
     __tablename__ = "books"
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(100), nullable=False)
+    author_name = Column(String(100), nullable=False)
     image_url = Column(String(255), nullable=False)
 
 # ساخت جدول در دیتابیس (اگر موجود نبود)

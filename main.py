@@ -2,6 +2,7 @@ from fastapi import FastAPI, Query, File, UploadFile, Form
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from database import SessionLocal, BookDB
+from sqlalchemy import func
 import shutil
 import os
 import uuid
@@ -20,11 +21,15 @@ class Book(BaseModel):
     title: str = Field(..., min_length=3, max_length=100)
     image_url: str
 
+class AuthorSearchResponse(BaseModel): 
+    author_name: str
+    book_count: int
 
 # اضافه کردن کتاب
 @app.post("/books")
 def add_book(
     title: str = Form(..., min_length=3, max_length=100),
+    author_name: str = Form(..., min_length=2, max_length=100),
     image: UploadFile = File(...)
 ):
     # ساخت نام یکتا برای تصویر
@@ -41,7 +46,7 @@ def add_book(
 
     # ذخیره اطلاعات در دیتابیس PostgreSQL
     db: Session = SessionLocal()
-    book = BookDB(title=title, image_url=image_url)
+    book = BookDB(title=title,author_name=author_name,image_url=image_url)
     db.add(book)
     db.commit()
     db.refresh(book)
@@ -49,7 +54,7 @@ def add_book(
 
     return {
         "message": "Book added successfully",
-        "book": {"id": book.id, "title": book.title, "image_url": book.image_url}
+        "book": {"id": book.id, "title": book.title, "image_url": book.image_url,"author": book.author_name}
     }
 
 
@@ -70,3 +75,19 @@ def search_books(
     )
     db.close()
     return results
+@app.get("/authors/search", response_model=list[AuthorSearchResponse])
+def search_authors(q: str = Query(..., min_length=2)):
+    db: Session = SessionLocal() # استفاده از تایپ هینتینگ برای دقت بیشتر
+    try:
+        results = (
+            db.query(
+                BookDB.author_name, 
+                func.count(BookDB.id).label("book_count")
+            )
+            .filter(BookDB.author_name.ilike(f"%{q}%"))
+            .group_by(BookDB.author_name)
+            .all()
+        )
+        return [{"author_name": r[0], "book_count": r[1]} for r in results]
+    finally:
+        db.close()
